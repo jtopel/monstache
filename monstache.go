@@ -80,7 +80,7 @@ var chunksRegex = regexp.MustCompile("\\.chunks$")
 var systemsRegex = regexp.MustCompile("system\\..+$")
 var exitStatus = 0
 
-const version = "6.5.5"
+const version = "6.5.5-digitile"
 const mongoURLDefault string = "mongodb://localhost:27017"
 const resumeNameDefault string = "default"
 const elasticMaxConnsDefault int = 4
@@ -91,6 +91,7 @@ const gtmChannelSizeDefault int = 512
 const fileDownloadersDefault = 10
 const relateThreadsDefault = 10
 const relateBufferDefault = 1000
+const mapperPluginThreadsDefault = 5
 const postProcessorsDefault = 10
 const redact = "REDACTED"
 const configDatabaseNameDefault = "monstache"
@@ -380,6 +381,7 @@ type configOptions struct {
 	DirectReadNoTimeout      bool           `toml:"direct-read-no-timeout"`
 	DirectReadBounded        bool           `toml:"direct-read-bounded"`
 	DirectReadExcludeRegex   string         `toml:"direct-read-dynamic-exclude-regex"`
+	MapperPluginThreads      int            `toml:"mapper-plugin-threads"`
 	MapperPluginPath         string         `toml:"mapper-plugin-path"`
 	EnableHTTPServer         bool           `toml:"enable-http-server"`
 	HTTPServerAddr           string         `toml:"http-server-addr"`
@@ -1620,6 +1622,7 @@ func (config *configOptions) parseCommandLineFlags() *configOptions {
 	flag.StringVar(&config.ResumeName, "resume-name", "", "Name under which to load/store the resume state. Defaults to 'default'")
 	flag.StringVar(&config.ClusterName, "cluster-name", "", "Name of the monstache process cluster")
 	flag.StringVar(&config.Worker, "worker", "", "The name of this worker in a multi-worker configuration")
+	flag.IntVar(&config.MapperPluginThreads, "mapper-plugin-threads", 0, "The number of threads to use when invoking the mapper plugin")
 	flag.StringVar(&config.MapperPluginPath, "mapper-plugin-path", "", "The path to a .so file to load as a document mapper plugin")
 	flag.StringVar(&config.DirectReadExcludeRegex, "direct-read-dynamic-exclude-regex", "", "A regex to use for excluding namespaces when using dynamic direct reads")
 	flag.StringVar(&config.NsRegex, "namespace-regex", "", "A regex which is matched against an operation's namespace (<database>.<collection>).  Only operations which match are synched to elasticsearch")
@@ -2143,6 +2146,9 @@ func (config *configOptions) loadConfigFile() *configOptions {
 		if config.GraylogAddr == "" {
 			config.GraylogAddr = tomlConfig.GraylogAddr
 		}
+		if config.MapperPluginThreads == 0 {
+			config.MapperPluginThreads = tomlConfig.MapperPluginThreads
+		}
 		if config.MapperPluginPath == "" {
 			config.MapperPluginPath = tomlConfig.MapperPluginPath
 		}
@@ -2603,6 +2609,9 @@ func (config *configOptions) setDefaults() *configOptions {
 	}
 	if config.FileDownloaders == 0 && config.IndexFiles {
 		config.FileDownloaders = fileDownloadersDefault
+	}
+	if config.MapperPluginThreads == 0 {
+		config.MapperPluginThreads = mapperPluginThreadsDefault
 	}
 	if config.RelateThreads == 0 {
 		config.RelateThreads = relateThreadsDefault
@@ -4673,7 +4682,7 @@ func (ic *indexClient) eventLoop() {
 }
 
 func (ic *indexClient) startIndex() {
-	for i := 0; i < 5; i++ {
+	for i := 0; i < ic.config.MapperPluginThreads; i++ {
 		ic.indexWg.Add(1)
 		go func() {
 			defer ic.indexWg.Done()
