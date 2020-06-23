@@ -34,11 +34,13 @@ var assetFields = map[string]bool{
 
 var searchUpdateFields = map[string]bool{
 	"filename":        true,
+	"filetype":        true,
 	"content":         true,
 	"tags":            true,
 	"thumbnail_url":   true,
 	"users":           true,
 	"remote_modified": true,
+	"owner":           true,
 	"editors":         true,
 	"counters":        true,
 	"forceSync":       true,
