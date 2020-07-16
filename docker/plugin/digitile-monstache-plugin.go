@@ -9,6 +9,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"log"
 	"os"
+	"runtime/debug"
 	"strings"
 	"sync"
 )
@@ -79,7 +80,7 @@ func ProcessDocument(input *monstachemap.MapperPluginInput) (output *monstachema
 
 	defer func() {
 		if recoveredError := recover(); recoveredError != nil {
-			err = fmt.Errorf("Syncing asset with ID %s failed with an unknow error: %s",
+			err = fmt.Errorf("Syncing asset with ID %s failed with an unknown error: %s",
 				assetId, recoveredError)
 		}
 	}()
@@ -110,11 +111,11 @@ func ProcessDocument(input *monstachemap.MapperPluginInput) (output *monstachema
 	var errorMessages = ""
 
 	for errorMessage := range lookupErrors {
-		errorMessages += errorMessage
+		errorMessages += errorMessage + "\n"
 	}
 
 	if len(errorMessages) > 0 {
-		err = fmt.Errorf("Syncing asset with ID %s failed with the following errors: %s",
+		err = fmt.Errorf("Syncing asset with ID %s failed with the following errors:\n%s",
 			assetId, errorMessages)
 	} else {
 		for documentFragment := range documentFragments {
@@ -182,6 +183,13 @@ func AddFileTypeFields(input *monstachemap.MapperPluginInput, document map[strin
 	documentFragments chan map[string]interface{}, lookupErrors chan string) {
 
 	defer wg.Done()
+
+	defer func() {
+		if recoveredError := recover(); recoveredError != nil {
+			lookupErrors <- fmt.Sprintf("Adding filetype details failed with an unknown error: %s\n%s",
+				recoveredError, string(debug.Stack()))
+		}
+	}()
 
 	assetId := document["id"].(string)
 	filetypeId := document["filetype"].(primitive.ObjectID)
@@ -272,6 +280,13 @@ func AddTagNames(input *monstachemap.MapperPluginInput, document map[string]inte
 
 	defer wg.Done()
 
+	defer func() {
+		if recoveredError := recover(); recoveredError != nil {
+			lookupErrors <- fmt.Sprintf("Adding tag details failed with an unknown error: %s\n%s",
+				recoveredError, string(debug.Stack()))
+		}
+	}()
+
 	assetId := document["id"].(string)
 	tags := document["tags"].([]interface{})
 	tagIds := make([]primitive.ObjectID, len(tags))
@@ -361,6 +376,13 @@ func AddUserDetails(input *monstachemap.MapperPluginInput, document map[string]i
 	documentFragments chan map[string]interface{}, lookupErrors chan string) {
 
 	defer wg.Done()
+
+	defer func() {
+		if recoveredError := recover(); recoveredError != nil {
+			lookupErrors <- fmt.Sprintf("Adding user details failed with an unknown error: %s\n%s",
+				recoveredError, string(debug.Stack()))
+		}
+	}()
 
 	assetId := document["id"].(string)
 	emails := document["users"].([]interface{})
